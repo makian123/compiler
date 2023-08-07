@@ -39,7 +39,7 @@ Token Tokenizer::NextToken(){
 		currLine++;
 		currChar = 0;
 
-		if(currLine > lines.size()) return Token(Token::Type::TEOF);
+		if(currLine >= lines.size()) return Token(Token::Type::TEOF);
 	}
 
 	while(std::isspace(lines[currLine][currChar])){
@@ -111,10 +111,10 @@ Token Tokenizer::NextToken(){
 		case ';': return Token(Token::Type::SEMICOLON, currCh, currLine);
 		case ',': return Token(Token::Type::COMMA, currCh, currLine);
 
-		case '(': return Token(Token::Type::SEMICOLON, currCh, currLine);
-		case ')': return Token(Token::Type::SEMICOLON, currCh, currLine);
-		case '{': return Token(Token::Type::SEMICOLON, currCh, currLine);
-		case '}': return Token(Token::Type::SEMICOLON, currCh, currLine);
+		case '(': return Token(Token::Type::OPEN_PARENTH, currCh, currLine);
+		case ')': return Token(Token::Type::CLOSED_PARENTH, currCh, currLine);
+		case '{': return Token(Token::Type::OPEN_BRACKET, currCh, currLine);
+		case '}': return Token(Token::Type::CLOSED_BRACKET, currCh, currLine);
 	}
 
 	return Token(Token::Type::ERR, "", currLine);

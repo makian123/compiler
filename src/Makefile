@@ -11,8 +11,6 @@ CXXFLAGS := \
 	-I./ \
 	-c \
 	-std=c++20 \
-	-Wall \
-	-Wno-stringop-truncation \
 	-MMD
 
 ifeq ($(TARGET), x86)
