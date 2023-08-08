@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <stdexcept>
 #include <iostream>
+#include <sstream>
 
 VarType VarType::ERROR = VarType();
 
@@ -21,13 +22,38 @@ static int Precedence(const Token &tok){
 
 static std::unordered_map<Token::Type, VarType> primitives;
 
-std::string Parser::GetCode(Node &node){
+static inline std::string Indent(int depth){
+	std::stringstream ss;
+	for(int i = 0; i < depth; ++i)
+		ss << "\t";
+
+	return ss.str();
+}
+
+static std::string GetCode(Node &node, int depth = 0){
 	std::string ret = "";
 
 	switch(node.type){
 		case NodeType::BLOCK:
+			ret += Indent(depth) + "BLOCK:\n";
 			for(auto &node_: static_cast<BlockNode&>(node).stmts)
-				ret += GetCode(*node_.get()) + "\n";
+				ret += GetCode(*node_.get(), depth + 1) + "\n";
+			if(static_cast<BlockNode&>(node).stmts.size() > 0) ret.erase(ret.end() - 1);
+			break;
+		case NodeType::VAL:
+			ret += Indent(depth) + static_cast<ValNode&>(node).val.val;
+			break;
+		case NodeType::BINARY:
+			ret += Indent(depth) + "BINARY:\n";
+			ret += Indent(depth + 1) + "LHS:\n" + GetCode(*static_cast<BinaryNode&>(node).lhs.get(), depth + 2) + "\n";
+			ret += Indent(depth + 1) + "OPERAND: " + static_cast<BinaryNode&>(node).operand.val + "\n";
+			ret += Indent(depth + 1) + "RHS:\n" + GetCode(*static_cast<BinaryNode&>(node).rhs.get(), depth + 2);
+			break;
+		case NodeType::VARDECL:
+			ret += Indent(depth) + "VAR:\n";
+			ret += Indent(depth + 1) + "Name: " + static_cast<VarDeclNode&>(node).ident.val + "\n";
+			ret += Indent(depth + 1) + "Val:\n";
+			ret += GetCode(*static_cast<VarDeclNode&>(node).initial.get(), depth + 2);
 			break;
 	}
 
@@ -81,7 +107,7 @@ void Parser::ParseStructdecl(){
 			Token name = NextToken();
 			auto delimiter = NextToken();
 
-			members.emplace_back(currType, name.val, offset);
+			members.emplace_back(&currType, name.val, offset);
 			offset += currType.typeSz;
 			
 			if(delimiter.type == Token::Type::SEMICOLON) break;
@@ -92,11 +118,12 @@ void Parser::ParseStructdecl(){
 	types.push_back(VarType(VarType::Type::STRUCT, structName.val, offset, nullptr, members, false, false, 0));
 }
 std::shared_ptr<Node> Parser::ParseStmt(){
+	std::shared_ptr<Node> ret = std::make_shared<Node>();
 	if(FindType(currTok).type != VarType::Type::ERR){
-		return ParseVarDecl();
+		ret = ParseVarDecl();
 	}
-
-	return std::make_shared<Node>();
+	NextToken();	//Semicolon
+	return ret;
 }
 std::shared_ptr<Node> Parser::ParseExpr(int parentPrecedence){
 	auto left = ParsePrimary();
@@ -107,7 +134,7 @@ std::shared_ptr<Node> Parser::ParseExpr(int parentPrecedence){
 			break;
 
 		Token operand = NextToken();
-		auto right = ParseExpr();
+		auto right = ParseExpr(precedence);
 		left = std::make_shared<BinaryNode>(left, operand, right);
 	}
 
@@ -135,6 +162,7 @@ std::shared_ptr<Node> Parser::ParseVarDecl(){
 		if(currTok.type == Token::Type::SEMICOLON)
 			return std::make_shared<VarDeclNode>(found, varName, std::make_shared<Node>());
 		
+		NextToken();	//Deals with the =
 		return std::make_shared<VarDeclNode>(found, varName, ParseExpr());
 	}
 	return std::make_shared<Node>();

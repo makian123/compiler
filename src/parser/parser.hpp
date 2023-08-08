@@ -8,11 +8,11 @@
 
 struct VarType;
 struct Member{
-	std::reference_wrapper<VarType> type;
+	VarType *type;
 	std::string name;
 	size_t offset;
 
-	Member(const std::reference_wrapper<VarType> type_, const std::string &name_, size_t offset_):type(type_), name(name_), offset(offset_) {}
+	Member(VarType *type_, const std::string &name_, size_t offset_):type(type_), name(name_), offset(offset_) {}
 	Member(const Member &other): type(other.type), name(other.name), offset(other.offset) {}
 };
 
@@ -80,11 +80,11 @@ struct BinaryNode: public Node {
 		: lhs(lhs_), operand(operand_), rhs(rhs_), Node(NodeType::BINARY) {}
 };
 struct VarDeclNode: public Node {
-	VarType type;
+	VarType varType;
 	Token ident;
 	std::shared_ptr<Node> initial;
 
-	VarDeclNode(VarType type_, Token ident_, std::shared_ptr<Node> init): type(type_), ident(ident_), initial(init) {}
+	VarDeclNode(VarType varType_, Token ident_, std::shared_ptr<Node> init): varType(varType_), ident(ident_), initial(init), Node(NodeType::VARDECL) {}
 };
 struct BlockNode: public Node {
 	std::vector<std::shared_ptr<Node>> stmts;
@@ -117,8 +117,6 @@ class Parser{
 
 	void ParseStructdecl();
 	VarType &FindType(Token name);
-
-	std::string GetCode(Node &node);
 
 	public:
 	Parser(Tokenizer &tok);

@@ -3,9 +3,9 @@
 #include "tokenizer/tokenizer.hpp"
 #include "parser/parser.hpp"
 
-int main(){
+int main(int argc, char **argv){
 	Tokenizer tokenizer;
-	tokenizer.AddLine("struct testStruct{ int var1; char var2; double var3; };");
+	tokenizer.AddLine("int lol = 12 + 4; char asd = 124 * 4 + lol;");
 
 	Parser parser(tokenizer);
 	parser.Parse();

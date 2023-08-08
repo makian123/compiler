@@ -99,7 +99,7 @@ Token Tokenizer::NextToken(){
 
 	}
 
-	std::string currCh{lines[currLine][currChar++], 0};
+	std::string currCh(1, lines[currLine][currChar++]);
 	switch(currCh[0]){
 		case '+': return Token(Token::Type::PLUS, currCh, currLine);
 		case '-': return Token(Token::Type::MINUS, currCh, currLine);
