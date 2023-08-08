@@ -2,5 +2,6 @@ build/*
 .vscode/
 
 *.o
+*.out
 *.d
 *.txt
