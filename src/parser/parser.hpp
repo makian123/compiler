@@ -8,11 +8,11 @@
 
 struct VarType;
 struct Member{
-	VarType *type;
+	const VarType *type;
 	std::string name;
 	size_t offset;
 
-	Member(VarType *type_, const std::string &name_, size_t offset_):type(type_), name(name_), offset(offset_) {}
+	Member(const VarType *type_, const std::string &name_, size_t offset_):type(type_), name(name_), offset(offset_) {}
 	Member(const Member &other): type(other.type), name(other.name), offset(other.offset) {}
 };
 
@@ -50,7 +50,7 @@ struct VarType{
 	VarType(const VarType &other)
 		:type(other.type), name(other.name), typeSz(other.typeSz), baseType(other.baseType), members(other.members), isUnsigned(other.isUnsigned), isArray(other.isArray), arrSize(other.arrSize){}
 
-	static VarType ERROR;
+	static const VarType ERROR;
 };
 
 enum class NodeType{
@@ -59,7 +59,8 @@ enum class NodeType{
 	VAL,
 	BINARY,
 	VARDECL,
-	BLOCK
+	BLOCK,
+	FUNCDECL
 };
 struct Node{
 	NodeType type;
@@ -80,29 +81,48 @@ struct BinaryNode: public Node {
 		: lhs(lhs_), operand(operand_), rhs(rhs_), Node(NodeType::BINARY) {}
 };
 struct VarDeclNode: public Node {
-	VarType varType;
+	const VarType *varType;
 	Token ident;
 	std::shared_ptr<Node> initial;
 
-	VarDeclNode(VarType varType_, Token ident_, std::shared_ptr<Node> init): varType(varType_), ident(ident_), initial(init), Node(NodeType::VARDECL) {}
+	VarDeclNode(const VarType *varType_, Token ident_, std::shared_ptr<Node> init): varType(varType_), ident(ident_), initial(init), Node(NodeType::VARDECL) {}
 };
 struct BlockNode: public Node {
 	std::vector<std::shared_ptr<Node>> stmts;
 
+	explicit BlockNode(): stmts(), Node(NodeType::BLOCK) {}
 	BlockNode(const std::vector<std::shared_ptr<Node>> &stmts_): stmts(stmts_), Node(NodeType::BLOCK) {}
 	void AddStmt(std::shared_ptr<Node> stmt){
 		stmts.push_back(stmt);
 	}
 };
+struct FuncDeclNode: public Node {
+	const VarType *funcType;
+	Token ident;
+	std::vector<std::shared_ptr<VarDeclNode>> params;
+	std::shared_ptr<Node> block;
+
+	FuncDeclNode(const VarType *funcType_, const Token &ident_, const std::vector<std::shared_ptr<VarDeclNode>> &params_, std::shared_ptr<Node> block_)
+		:funcType(funcType_), ident(ident_), params(params_), block(block_), Node(NodeType::FUNCDECL) {}
+};
 
 class Parser{
 	private:
-	std::vector<VarType> types;
-	std::vector<Token> identifiers;
+	struct Scope{
+		std::vector<VarType> types;
+		std::vector<Token> identifiers;
+
+		std::vector<std::shared_ptr<Scope>> scopes;
+		std::shared_ptr<Scope> parent;
+
+		Scope() = default;
+	};
+	private:
 	std::shared_ptr<BlockNode> rootNode;
 
 	Tokenizer &tokenizer;
 	Token currTok;
+	std::shared_ptr<Scope> currScope;
 
 	Token NextToken(){
 		Token ret = currTok;
@@ -110,16 +130,20 @@ class Parser{
 		return ret;
 	}
 
+	std::shared_ptr<Node> ParseBlock();
 	std::shared_ptr<Node> ParsePrimary();
+	std::shared_ptr<Node> ParseFuncDecl(const VarType &type, const Token &name);
+	std::shared_ptr<Node> ParseParam();
 	std::shared_ptr<Node> ParseVarDecl();
 	std::shared_ptr<Node> ParseExpr(int parentPrecedence = 0);
 	std::shared_ptr<Node> ParseStmt();
 
 	void ParseStructdecl();
-	VarType &FindType(Token name);
-
+	const Token &FindIdent(const Token &name) const;
+	const VarType &FindType(const Token &name) const;
 	public:
 	Parser(Tokenizer &tok);
+
 	void Parse();
-	std::string GenerateCode();
+	std::string GenerateCode() const;
 };

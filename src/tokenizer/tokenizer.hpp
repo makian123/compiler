@@ -17,7 +17,8 @@ struct Token{
 		VALUES_END = STRING_LITERAL,
 
 		TYPES_BEGIN,
-		TYPE_CHAR = TYPES_BEGIN,
+		TYPE_VOID = TYPES_BEGIN,
+		TYPE_CHAR,
 		TYPE_SHORT,
 		TYPE_INT,
 		TYPE_LONG,
@@ -59,6 +60,8 @@ struct Token{
 
 		return *this;
 	}
+
+	static const Token ERROR;
 };
 
 class Tokenizer{

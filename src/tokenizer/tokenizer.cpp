@@ -3,7 +3,10 @@
 #include <unordered_map>
 #include <algorithm>
 
+const Token Token::ERROR = Token();
+
 static const std::unordered_map<std::string, Token::Type> keywords{
+	{ "void", Token::Type::TYPE_VOID },
 	{ "char", Token::Type::TYPE_CHAR },
 	{ "short", Token::Type::TYPE_SHORT },
 	{ "int", Token::Type::TYPE_INT },
