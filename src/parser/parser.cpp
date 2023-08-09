@@ -44,6 +44,14 @@ static std::string GetCode(Node &node, int depth = 0){
 		case NodeType::VAL:
 			ret += Indent(depth) + static_cast<ValNode&>(node).val.val;
 			break;
+		case NodeType::RETURN:
+			ret += Indent(depth) + "RETURN:\n";
+			ret += Indent(depth + 1) + "VAL:";
+			if(static_cast<ReturnNode&>(node).expr->type == NodeType::ERR)
+				ret += "VOID";
+			else
+				ret += GetCode(*static_cast<ReturnNode&>(node).expr.get());
+			break;
 		case NodeType::BINARY:
 			ret += Indent(depth) + "BINARY:\n";
 			ret += Indent(depth + 1) + "LHS:\n" + GetCode(*static_cast<BinaryNode&>(node).lhs.get(), depth + 2) + "\n";
@@ -196,15 +204,22 @@ std::shared_ptr<Node> Parser::ParseStmt(){
 	//Variable or function decl
 	if(FindType(currTok).type != VarType::Type::ERR){
 		ret = ParseVarDecl();
+		NextToken();	//Semicolon
 	}
 	else if(currTok.type == Token::Type::TYPE_STRUCT){
 		ParseStructdecl();
+		NextToken();	//Semicolon
 	}
 	//Variable stmt
 	else if(currTok.type == Token::Type::IF){
 		ret = ParseIf();
 	}
-	NextToken();	//Semicolon
+	else if(currTok.type == Token::Type::RETURN){
+		NextToken();
+		ret = std::make_shared<ReturnNode>(ParseExpr());
+		NextToken();	//Semicolon
+	}
+	
 	return ret;
 }
 std::shared_ptr<Node> Parser::ParseFuncDecl(const VarType &funcType, const Token &name){
@@ -264,7 +279,7 @@ std::shared_ptr<Node> Parser::ParseIf(){
 		if(cond->type == NodeType::ERR) return ret;
 
 		NextToken();
-
+	
 		currScope->scopes.push_back(std::make_shared<Scope>());
 		currScope->scopes.back()->parent = currScope;
 		currScope = currScope->scopes.back();
@@ -313,7 +328,8 @@ std::shared_ptr<Node> Parser::ParseExpr(int parentPrecedence){
 }
 std::shared_ptr<Node> Parser::ParsePrimary(){
 	std::shared_ptr<Node> ret = std::make_shared<Node>();
-	if((int)currTok.type >= (int)Token::Type::VALUES_BEGIN && (int)currTok.type <= (int)Token::Type::VALUES_END) {
+	if((int)currTok.type >= (int)Token::Type::VALUES_BEGIN && (int)currTok.type <= (int)Token::Type::VALUES_END
+		|| currTok.type == Token::Type::IDENT) {
 		ret = std::make_shared<ValNode>(NextToken());
 	}
 	else if(currTok.type == Token::Type::OPEN_PARENTH){

@@ -41,6 +41,8 @@ struct Token{
 
 		IF,
 		ELSE,
+
+		RETURN,
 		
 		OPEN_PARENTH,
 		CLOSED_PARENTH,

@@ -17,6 +17,7 @@ static const std::unordered_map<std::string, Token::Type> keywords{
 	{ "struct", Token::Type::TYPE_STRUCT },
 	{ "if", Token::Type::IF },
 	{ "else", Token::Type::ELSE },
+	{ "return", Token::Type::RETURN },
 };
 
 void Tokenizer::AddLine(std::string line){

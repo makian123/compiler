@@ -61,7 +61,10 @@ enum class NodeType{
 	VARDECL,
 	BLOCK,
 	FUNCDECL,
-	IF
+	IF,
+	RETURN,
+	FUNCTIONCALL,
+	VARASSIGN
 };
 struct Node{
 	NodeType type;
@@ -69,26 +72,26 @@ struct Node{
 	explicit Node(NodeType type = NodeType::ERR): type(type) {}
 	virtual ~Node() = default;
 };
-struct ValNode: public Node {
+struct ValNode: public Node{
 	Token val;
 
 	ValNode(const Token &tok): val(tok), Node(NodeType::VAL) {}
 };
-struct BinaryNode: public Node {
+struct BinaryNode: public Node{
 	std::shared_ptr<Node> lhs, rhs;
 	Token operand;
 
 	BinaryNode(std::shared_ptr<Node> lhs_, const Token &operand_, std::shared_ptr<Node> rhs_)
 		: lhs(lhs_), operand(operand_), rhs(rhs_), Node(NodeType::BINARY) {}
 };
-struct VarDeclNode: public Node {
+struct VarDeclNode: public Node{
 	const VarType *varType;
 	Token ident;
 	std::shared_ptr<Node> initial;
 
 	VarDeclNode(const VarType *varType_, Token ident_, std::shared_ptr<Node> init): varType(varType_), ident(ident_), initial(init), Node(NodeType::VARDECL) {}
 };
-struct BlockNode: public Node {
+struct BlockNode: public Node{
 	std::vector<std::shared_ptr<Node>> stmts;
 
 	explicit BlockNode(): stmts(), Node(NodeType::BLOCK) {}
@@ -97,7 +100,7 @@ struct BlockNode: public Node {
 		stmts.push_back(stmt);
 	}
 };
-struct FuncDeclNode: public Node {
+struct FuncDeclNode: public Node{
 	const VarType *funcType;
 	Token ident;
 	std::vector<std::shared_ptr<VarDeclNode>> params;
@@ -105,6 +108,11 @@ struct FuncDeclNode: public Node {
 
 	FuncDeclNode(const VarType *funcType_, const Token &ident_, const std::vector<std::shared_ptr<VarDeclNode>> &params_, std::shared_ptr<Node> block_)
 		:funcType(funcType_), ident(ident_), params(params_), block(block_), Node(NodeType::FUNCDECL) {}
+};
+struct ReturnNode: public Node{
+	std::shared_ptr<Node> expr;
+
+	ReturnNode(std::shared_ptr<Node> expr_): expr(expr_), Node(NodeType::RETURN) {}
 };
 struct IfNode: public Node{
 	std::shared_ptr<Node> cond;
@@ -114,6 +122,20 @@ struct IfNode: public Node{
 	explicit IfNode(): Node(NodeType::IF) {}
 	IfNode(std::shared_ptr<Node> cond_, std::shared_ptr<Node> then_, std::shared_ptr<Node> elseBody_)
 		:cond(cond_), then(then_), elseBody(elseBody_), Node(NodeType::IF) {}
+};
+struct VarAssignNode: public Node{
+	Token varName;
+	std::shared_ptr<Node> expression;
+
+	VarAssignNode(const Token &varName_, std::shared_ptr<Node> expression_)
+		:varName(varName_), expression(expression_), Node(NodeType::VARASSIGN) {}
+};
+struct FuncCallNode: public Node{
+	Token funcName;
+	std::vector<std::shared_ptr<Node>> params;
+
+	FuncCallNode(const Token &funcName_, const std::vector<std::shared_ptr<Node>> &params_)
+		:funcName(funcName_), params(params_), Node(NodeType::FUNCTIONCALL) {}
 };
 
 class Parser{
