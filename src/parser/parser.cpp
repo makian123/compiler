@@ -67,6 +67,18 @@ static std::string GetCode(Node &node, int depth = 0){
 			ret += Indent(depth + 1) + "Body:\n";
 			ret += GetCode(*static_cast<FuncDeclNode&>(node).block.get(), depth + 2);
 			break;
+		case NodeType::IF:
+			ret += Indent(depth) + "IF:\n";
+			ret += Indent(depth + 1) + "Cond:\n";
+			ret += GetCode(*static_cast<IfNode&>(node).cond.get(), depth + 2) + "\n";
+			ret += Indent(depth + 1) + "Then:\n";
+			ret += GetCode(*static_cast<IfNode&>(node).then.get(), depth + 2);
+
+			if(static_cast<IfNode&>(node).elseBody->type != NodeType::ERR){
+				ret += "\n" + Indent(depth + 1) + "Else:\n";
+				ret += GetCode(*static_cast<IfNode&>(node).elseBody.get(), depth + 2);
+			}
+			break;
 	}
 
 	return ret;
@@ -131,7 +143,6 @@ void Parser::Parse(){
 std::shared_ptr<Node> Parser::ParseBlock(){
 	if(currTok.type != Token::Type::OPEN_BRACKET){
 		auto stmt = ParseStmt();
-		NextToken(); //Semicolon
 		return stmt;
 	}
 	
@@ -176,42 +187,24 @@ void Parser::ParseStructdecl(){
 			if(delimiter.type == Token::Type::SEMICOLON) break;
 		}
 	}
-	NextToken();	//Semicolon
 
 	currScope->types.push_back(VarType(VarType::Type::STRUCT, structName.val, offset, nullptr, members, false, false, 0));
 }
 std::shared_ptr<Node> Parser::ParseStmt(){
 	std::shared_ptr<Node> ret = std::make_shared<Node>();
+
+	//Variable or function decl
 	if(FindType(currTok).type != VarType::Type::ERR){
 		ret = ParseVarDecl();
 	}
+	else if(currTok.type == Token::Type::TYPE_STRUCT){
+		ParseStructdecl();
+	}
+	//Variable stmt
+	else if(currTok.type == Token::Type::IF){
+		ret = ParseIf();
+	}
 	NextToken();	//Semicolon
-	return ret;
-}
-std::shared_ptr<Node> Parser::ParseExpr(int parentPrecedence){
-	auto left = ParsePrimary();
-
-	while(true){
-		auto precedence = Precedence(currTok);
-		if(precedence == 0 || precedence <= parentPrecedence)
-			break;
-
-		Token operand = NextToken();
-		auto right = ParseExpr(precedence);
-		left = std::make_shared<BinaryNode>(left, operand, right);
-	}
-
-	return left;
-}
-std::shared_ptr<Node> Parser::ParsePrimary(){
-	std::shared_ptr<Node> ret = std::make_shared<Node>();
-	if((int)currTok.type >= (int)Token::Type::VALUES_BEGIN && (int)currTok.type <= (int)Token::Type::VALUES_END) {
-		ret = std::make_shared<ValNode>(NextToken());
-	}
-	else if(currTok.type == Token::Type::OPEN_PARENTH){
-		NextToken();
-		ret = ParseExpr();
-	}
 	return ret;
 }
 std::shared_ptr<Node> Parser::ParseFuncDecl(const VarType &funcType, const Token &name){
@@ -259,6 +252,76 @@ std::shared_ptr<Node> Parser::ParseParam(){
 
 	return std::make_shared<Node>();
 }
+std::shared_ptr<Node> Parser::ParseIf(){
+	std::shared_ptr<Node> ret = std::make_shared<Node>();
+	if(currTok.type == Token::Type::IF){
+		NextToken();
+
+		if(currTok.type != Token::Type::OPEN_PARENTH) return ret;
+		NextToken();
+
+		auto cond = ParseExpr();
+		if(cond->type == NodeType::ERR) return ret;
+
+		NextToken();
+
+		currScope->scopes.push_back(std::make_shared<Scope>());
+		currScope->scopes.back()->parent = currScope;
+		currScope = currScope->scopes.back();
+		auto then = ParseBlock();
+		currScope = currScope->parent;
+		if(then->type == NodeType::ERR) {
+			currScope->scopes.pop_back();
+			return ret;
+		}
+
+		std::shared_ptr<Node> elseBody = std::make_shared<Node>();
+		if(currTok.type == Token::Type::ELSE){
+			NextToken();
+
+			currScope->scopes.push_back(std::make_shared<Scope>());
+			currScope->scopes.back()->parent = currScope;
+			currScope = currScope->scopes.back();
+			elseBody = ParseBlock();
+			currScope = currScope->parent;
+
+			if(elseBody->type == NodeType::ERR) {
+				currScope->scopes.pop_back();
+			}
+		}
+
+		ret = std::make_shared<IfNode>(cond, then, elseBody);
+	}
+
+	return ret;
+}
+
+std::shared_ptr<Node> Parser::ParseExpr(int parentPrecedence){
+	auto left = ParsePrimary();
+
+	while(true){
+		auto precedence = Precedence(currTok);
+		if(precedence == 0 || precedence <= parentPrecedence)
+			break;
+
+		Token operand = NextToken();
+		auto right = ParseExpr(precedence);
+		left = std::make_shared<BinaryNode>(left, operand, right);
+	}
+
+	return left;
+}
+std::shared_ptr<Node> Parser::ParsePrimary(){
+	std::shared_ptr<Node> ret = std::make_shared<Node>();
+	if((int)currTok.type >= (int)Token::Type::VALUES_BEGIN && (int)currTok.type <= (int)Token::Type::VALUES_END) {
+		ret = std::make_shared<ValNode>(NextToken());
+	}
+	else if(currTok.type == Token::Type::OPEN_PARENTH){
+		NextToken();
+		ret = ParseExpr();
+	}
+	return ret;
+}
 std::shared_ptr<Node> Parser::ParseVarDecl(){
 	Token typeName = currTok;
 	auto &found = FindType(typeName);
@@ -285,7 +348,7 @@ std::shared_ptr<Node> Parser::ParseVarDecl(){
 }
 
 Parser::Parser(Tokenizer &tok): tokenizer(tok) {
-	primitives[Token::Type::TYPE_VOID] = VarType(VarType::Type::VOID, std::string(), 1, nullptr, std::vector<Member>(), false, false, 0);
+	primitives[Token::Type::TYPE_VOID] = VarType(VarType::Type::VOID, std::string(), 0, nullptr, std::vector<Member>(), false, false, 0);
 	primitives[Token::Type::TYPE_CHAR] = VarType(VarType::Type::CHAR, std::string(), 1, nullptr, std::vector<Member>(), false, false, 0);
 	primitives[Token::Type::TYPE_SHORT] = VarType(VarType::Type::SHORT, std::string(), 2, nullptr, std::vector<Member>(), false, false, 0);
 	primitives[Token::Type::TYPE_INT] = VarType(VarType::Type::INT, std::string(), 4, nullptr, std::vector<Member>(), false, false, 0);

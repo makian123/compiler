@@ -14,7 +14,9 @@ static const std::unordered_map<std::string, Token::Type> keywords{
 	{ "float", Token::Type::TYPE_FLOAT },
 	{ "double", Token::Type::TYPE_DOUBLE },
 	{ "enum", Token::Type::TYPE_ENUM },
-	{ "struct", Token::Type::TYPE_STRUCT }
+	{ "struct", Token::Type::TYPE_STRUCT },
+	{ "if", Token::Type::IF },
+	{ "else", Token::Type::ELSE },
 };
 
 void Tokenizer::AddLine(std::string line){
@@ -104,20 +106,21 @@ Token Tokenizer::NextToken(){
 
 	std::string currCh(1, lines[currLine][currChar++]);
 	switch(currCh[0]){
-		case '+': return Token(Token::Type::PLUS, currCh, currLine);
-		case '-': return Token(Token::Type::MINUS, currCh, currLine);
-		case '*': return Token(Token::Type::STAR, currCh, currLine);
-		case '/': return Token(Token::Type::SLASH, currCh, currLine);
+		case '+': return Token(Token::Type::PLUS, "", currLine);
+		case '-': return Token(Token::Type::MINUS, "", currLine);
+		case '*': return Token(Token::Type::STAR, "", currLine);
+		case '/': return Token(Token::Type::SLASH, "", currLine);
 
-		case '=': return Token(Token::Type::EQ, currCh, currLine);
+		case '=': return Token(Token::Type::EQ, "", currLine);
 
-		case ';': return Token(Token::Type::SEMICOLON, currCh, currLine);
-		case ',': return Token(Token::Type::COMMA, currCh, currLine);
+		case ';': return Token(Token::Type::SEMICOLON, "", currLine);
+		case ',': return Token(Token::Type::COMMA, "", currLine);
+		case '.': return Token(Token::Type::DOT, "", currLine);
 
-		case '(': return Token(Token::Type::OPEN_PARENTH, currCh, currLine);
-		case ')': return Token(Token::Type::CLOSED_PARENTH, currCh, currLine);
-		case '{': return Token(Token::Type::OPEN_BRACKET, currCh, currLine);
-		case '}': return Token(Token::Type::CLOSED_BRACKET, currCh, currLine);
+		case '(': return Token(Token::Type::OPEN_PARENTH, "", currLine);
+		case ')': return Token(Token::Type::CLOSED_PARENTH, "", currLine);
+		case '{': return Token(Token::Type::OPEN_BRACKET, "", currLine);
+		case '}': return Token(Token::Type::CLOSED_BRACKET, "", currLine);
 	}
 
 	return Token(Token::Type::ERR, "", currLine);

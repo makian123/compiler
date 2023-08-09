@@ -60,7 +60,8 @@ enum class NodeType{
 	BINARY,
 	VARDECL,
 	BLOCK,
-	FUNCDECL
+	FUNCDECL,
+	IF
 };
 struct Node{
 	NodeType type;
@@ -105,6 +106,15 @@ struct FuncDeclNode: public Node {
 	FuncDeclNode(const VarType *funcType_, const Token &ident_, const std::vector<std::shared_ptr<VarDeclNode>> &params_, std::shared_ptr<Node> block_)
 		:funcType(funcType_), ident(ident_), params(params_), block(block_), Node(NodeType::FUNCDECL) {}
 };
+struct IfNode: public Node{
+	std::shared_ptr<Node> cond;
+	std::shared_ptr<Node> then;
+	std::shared_ptr<Node> elseBody;
+
+	explicit IfNode(): Node(NodeType::IF) {}
+	IfNode(std::shared_ptr<Node> cond_, std::shared_ptr<Node> then_, std::shared_ptr<Node> elseBody_)
+		:cond(cond_), then(then_), elseBody(elseBody_), Node(NodeType::IF) {}
+};
 
 class Parser{
 	private:
@@ -130,6 +140,7 @@ class Parser{
 		return ret;
 	}
 
+	std::shared_ptr<Node> ParseIf();
 	std::shared_ptr<Node> ParseBlock();
 	std::shared_ptr<Node> ParsePrimary();
 	std::shared_ptr<Node> ParseFuncDecl(const VarType &type, const Token &name);

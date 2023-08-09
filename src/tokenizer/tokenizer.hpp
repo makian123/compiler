@@ -37,6 +37,10 @@ struct Token{
 
 		SEMICOLON,
 		COMMA,
+		DOT,
+
+		IF,
+		ELSE,
 		
 		OPEN_PARENTH,
 		CLOSED_PARENTH,
