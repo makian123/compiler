@@ -24,6 +24,10 @@ void Tokenizer::AddLine(std::string line){
 	while (line.find("\r\n") != std::string::npos){
     	line.erase(line.find("\r\n"), 2);
 	}
+	if(!line.length()){
+		lines.push_back("");
+		return;
+	}
 
 	while(line.length()){
 		auto pos = line.find_first_of('\n');
@@ -59,15 +63,17 @@ Token Tokenizer::NextToken(){
 		}
 	}
 
+	line = currLine + 1;
+	chr = currChar + 1;
 	if(std::isalpha(lines[currLine][currChar])){
 		std::string val{};
 		while(std::isalnum(lines[currLine][currChar]) && currChar < lines[currLine].size()){
 			val += lines[currLine][currChar++];
 		}
 
-		if(keywords.contains(val)) return Token(keywords.at(val), val, currLine);
+		if(keywords.contains(val)) return Token(keywords.at(val), val, line);
 
-		return Token(Token::Type::IDENT, val, currLine);
+		return Token(Token::Type::IDENT, val, line);
 	}
 	if(std::isdigit(lines[currLine][currChar])){
 		std::string val;
@@ -75,22 +81,22 @@ Token Tokenizer::NextToken(){
 			val += lines[currLine][currChar++];
 		}
 
-		if(std::count(val.begin(), val.end(), '.') > 1) return Token(Token::Type::ERR, "", currLine);
+		if(std::count(val.begin(), val.end(), '.') > 1) return Token();
 
-		if(std::count(val.begin(), val.end(), '.') == 1) return Token(Token::Type::FLOATING_NUMBER, val, currLine);
-		return Token(Token::Type::INTEGER_NUMBER, val, currLine);
+		if(std::count(val.begin(), val.end(), '.') == 1) return Token(Token::Type::FLOATING_NUMBER, val, line);
+		return Token(Token::Type::INTEGER_NUMBER, val, line);
 	}
 	if(lines[currLine][currChar] == '\''){
 		try{
 			std::string val{lines[currLine][++currChar], 0};
 			char lookahead = lines[currLine].at(currChar + 1);
-			if(lookahead != '\'') return Token(Token::Type::ERR, "", currLine);
+			if(lookahead != '\'') return Token();
 			currChar++;
 
-			return Token(Token::Type::CHAR_LITERAL, val, currLine);
+			return Token(Token::Type::CHAR_LITERAL, val, line);
 		}
 		catch(...){
-			return Token(Token::Type::ERR, "", currLine);
+			return Token(Token::Type::ERR, "", line);
 		}
 	}
 	if(lines[currLine][currChar] == '"'){
@@ -100,29 +106,76 @@ Token Tokenizer::NextToken(){
 		while(lines[currLine][currChar] != '"'){
 			val += lines[currLine][currChar++];
 
-			if(currChar >= lines[currLine].size()) return Token(Token::Type::ERR, "", currLine);
+			if(currChar >= lines[currLine].size()) return Token(Token::Type::ERR, "", line);
 		}
 
 	}
 
-	std::string currCh(1, lines[currLine][currChar++]);
-	switch(currCh[0]){
-		case '+': return Token(Token::Type::PLUS, "", currLine);
-		case '-': return Token(Token::Type::MINUS, "", currLine);
-		case '*': return Token(Token::Type::STAR, "", currLine);
-		case '/': return Token(Token::Type::SLASH, "", currLine);
+	char lookahead = (currChar + 1 >= lines[currLine].size() ? '\0' : lines[currLine][currChar + 1]);
+	switch(lines[currLine][currChar++]){
+		case '+': 
+			if(lookahead == '='){
+				currChar++;
+				return Token(Token::Type::ADDASSIGN, "", line);
+			}
+			return Token(Token::Type::PLUS, "", line);
+		case '-': 
+			if(lookahead == '='){
+				currChar++;
+				return Token(Token::Type::SUBASSIGN, "", line);
+			}
+			else if(lookahead == '>'){
+				currChar++;
+				return Token(Token::Type::DEREFERENCE, "", line);
+			}
+			return Token(Token::Type::MINUS, "", line);
+		case '*': 
+			if(lookahead == '='){
+				currChar++;
+				return Token(Token::Type::MULTASSIGN, "", line);
+			}
+			return Token(Token::Type::STAR, "", line);
+		case '/': 
+			if(lookahead == '='){
+				currChar++;
+				return Token(Token::Type::DIVASSIGN, "", line);
+			}
+			return Token(Token::Type::SLASH, "", line);
 
-		case '=': return Token(Token::Type::EQ, "", currLine);
+		case '=': 
+			if(lookahead == '='){
+				currChar++;
+				return Token(Token::Type::EQ, "", line);
+			}
+			return Token(Token::Type::ASSIGN, "", line);
+		case '!':
+			if(lookahead == '='){
+				currChar++;
+				return Token(Token::Type::NEQ, "", line);
+			}
+			return Token(Token::Type::NOT, "", line);
+		case '>': 
+			if(lookahead == '='){
+				currChar++;
+				return Token(Token::Type::GEQ, "", line);
+			}
+			return Token(Token::Type::GREATER, "", line);
+		case '<': 
+			if(lookahead == '='){
+				currChar++;
+				return Token(Token::Type::LEQ, "", line);
+			}
+			return Token(Token::Type::LESS, "", line);
 
-		case ';': return Token(Token::Type::SEMICOLON, "", currLine);
-		case ',': return Token(Token::Type::COMMA, "", currLine);
-		case '.': return Token(Token::Type::DOT, "", currLine);
+		case ';': return Token(Token::Type::SEMICOLON, "", line);
+		case ',': return Token(Token::Type::COMMA, "", line);
+		case '.': return Token(Token::Type::DOT, "", line);
 
-		case '(': return Token(Token::Type::OPEN_PARENTH, "", currLine);
-		case ')': return Token(Token::Type::CLOSED_PARENTH, "", currLine);
-		case '{': return Token(Token::Type::OPEN_BRACKET, "", currLine);
-		case '}': return Token(Token::Type::CLOSED_BRACKET, "", currLine);
+		case '(': return Token(Token::Type::OPEN_PARENTH, "", line);
+		case ')': return Token(Token::Type::CLOSED_PARENTH, "", line);
+		case '{': return Token(Token::Type::OPEN_BRACKET, "", line);
+		case '}': return Token(Token::Type::CLOSED_BRACKET, "", line);
 	}
 
-	return Token(Token::Type::ERR, "", currLine);
+	return Token();
 }

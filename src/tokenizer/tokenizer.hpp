@@ -8,9 +8,9 @@ struct Token{
 		ERR = -2,
 		TEOF = -1,
 
+		IDENT,
 		VALUES_BEGIN,
-		IDENT = VALUES_BEGIN,
-		INTEGER_NUMBER,
+		INTEGER_NUMBER = VALUES_BEGIN,
 		FLOATING_NUMBER,
 		CHAR_LITERAL,
 		STRING_LITERAL,
@@ -33,11 +33,25 @@ struct Token{
 		STAR,
 		SLASH,
 		
+		ASSIGN,
+		ADDASSIGN,
+		SUBASSIGN,
+		MULTASSIGN,
+		DIVASSIGN,
+
+		NOT,
+
 		EQ,
+		NEQ,
+		GREATER,
+		GEQ,
+		LESS,
+		LEQ,
 
 		SEMICOLON,
 		COMMA,
 		DOT,
+		DEREFERENCE,
 
 		IF,
 		ELSE,
@@ -73,6 +87,7 @@ struct Token{
 class Tokenizer{
 	private:
 	std::vector<std::string> lines {};
+	size_t line = 1, chr = 1;
 	size_t currLine = 0, currChar = 0;
 
 	public:

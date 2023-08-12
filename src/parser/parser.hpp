@@ -4,14 +4,16 @@
 #include <vector>
 #include <functional>
 #include <iostream>
+#include <unordered_map>
 #include "tokenizer/tokenizer.hpp"
 
 struct VarType;
 struct Member{
-	const VarType *type;
-	std::string name;
-	size_t offset;
+	const VarType *type = nullptr;
+	std::string name = "";
+	size_t offset = 0;
 
+	explicit Member() = default;
 	Member(const VarType *type_, const std::string &name_, size_t offset_):type(type_), name(name_), offset(offset_) {}
 	Member(const Member &other): type(other.type), name(other.name), offset(other.offset) {}
 };
@@ -64,7 +66,8 @@ enum class NodeType{
 	IF,
 	RETURN,
 	FUNCTIONCALL,
-	VARASSIGN
+	VARASSIGN,
+	MEMBER
 };
 struct Node{
 	NodeType type;
@@ -137,12 +140,16 @@ struct FuncCallNode: public Node{
 	FuncCallNode(const Token &funcName_, const std::vector<std::shared_ptr<Node>> &params_)
 		:funcName(funcName_), params(params_), Node(NodeType::FUNCTIONCALL) {}
 };
+struct MemberNode: public Node{
+	Member member;
+	MemberNode(Member member_):member(member_), Node(NodeType::MEMBER) {}
+};
 
 class Parser{
 	private:
 	struct Scope{
 		std::vector<VarType> types;
-		std::vector<Token> identifiers;
+		std::vector<std::pair<Token, VarType>> identifiers;
 
 		std::vector<std::shared_ptr<Scope>> scopes;
 		std::shared_ptr<Scope> parent;
@@ -150,6 +157,7 @@ class Parser{
 		Scope() = default;
 	};
 	private:
+	friend class Log;
 	std::shared_ptr<BlockNode> rootNode;
 
 	Tokenizer &tokenizer;
@@ -172,7 +180,7 @@ class Parser{
 	std::shared_ptr<Node> ParseStmt();
 
 	void ParseStructdecl();
-	const Token &FindIdent(const Token &name) const;
+	std::pair<Token, VarType> &FindIdent(const Token &name) const;
 	const VarType &FindType(const Token &name) const;
 	public:
 	Parser(Tokenizer &tok);
