@@ -64,6 +64,7 @@ enum class NodeType{
 	BLOCK,
 	FUNCDECL,
 	IF,
+	WHILE,
 	RETURN,
 	FUNCTIONCALL,
 	VARASSIGN,
@@ -126,6 +127,12 @@ struct IfNode: public Node{
 	IfNode(std::shared_ptr<Node> cond_, std::shared_ptr<Node> then_, std::shared_ptr<Node> elseBody_)
 		:cond(cond_), then(then_), elseBody(elseBody_), Node(NodeType::IF) {}
 };
+struct WhileNode: public Node{
+	std::shared_ptr<Node> cond, then;
+
+	WhileNode(std::shared_ptr<Node> cond_, std::shared_ptr<Node> then_)
+		:cond(cond_), then(then_), Node(NodeType::WHILE) {}
+};
 struct VarAssignNode: public Node{
 	Token varName;
 	std::shared_ptr<Node> expression;
@@ -187,4 +194,5 @@ class Parser{
 
 	void Parse();
 	std::string GenerateCode() const;
+	const Node *GetRoot() { return rootNode.get(); }
 };

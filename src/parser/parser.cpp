@@ -115,6 +115,13 @@ static std::string GetCode(Node &node, int depth = 0){
 				ret += GetCode(*static_cast<IfNode&>(node).elseBody.get(), depth + 2);
 			}
 			break;
+		case NodeType::WHILE:
+			ret += Indent(depth) + "WHILE:\n";
+			ret += Indent(depth + 1) + "COND:\n";
+			ret += GetCode(*static_cast<WhileNode&>(node).cond.get(), depth + 2) + "\n";
+			ret += Indent(depth + 1) + "THEN:\n";
+			ret += GetCode(*static_cast<WhileNode&>(node).then.get(), depth + 2);
+			break;
 	}
 
 	return ret;
@@ -203,7 +210,9 @@ void Parser::ParseStructdecl(){
 	Token structName = NextToken();
 
 	Token tmp = NextToken();
-	if(tmp.type != Token::Type::OPEN_BRACKET) return;
+	if(tmp.type != Token::Type::OPEN_BRACKET){
+		Log::Error(*this, "Missing (");
+	}
 	
 	std::vector<Member> members;
 	size_t offset = 0;
@@ -230,7 +239,7 @@ std::shared_ptr<Node> Parser::ParseStmt(){
 	//Variable or function decl
 	if(FindType(currTok).type != VarType::Type::ERR){
 		ret = ParseVarDecl();
-		NextToken();	//Semicolon
+		NextToken();
 	}
 	else if(currTok.type == Token::Type::TYPE_STRUCT){
 		ParseStructdecl();
@@ -244,6 +253,36 @@ std::shared_ptr<Node> Parser::ParseStmt(){
 		NextToken();
 		ret = std::make_shared<ReturnNode>(ParseExpr());
 		NextToken();	//Semicolon
+	}
+	else if(currTok.type == Token::Type::WHILE){
+		NextToken();
+		if(currTok.type != Token::Type::OPEN_PARENTH){
+			Log::Error(*this, "Missing (");
+		}
+
+		NextToken();
+		auto cond = ParseExpr();
+		NextToken();
+
+		std::shared_ptr<Node> then = std::make_shared<Node>();
+		if(currTok.type != Token::Type::OPEN_BRACKET){
+			then = ParseStmt();
+		}
+		else{
+			NextToken();
+			
+			currScope->scopes.push_back(std::make_shared<Scope>());
+			currScope->scopes.back()->parent = currScope;
+			currScope = currScope->scopes.back();
+
+			then = ParseBlock();
+			
+			currScope = currScope->parent;
+
+			ret = std::make_shared<WhileNode>(cond, then);
+
+			NextToken();
+		}
 	}
 	else if(currTok.type == Token::Type::IDENT){
 		//TODO: make it work
@@ -302,11 +341,15 @@ std::shared_ptr<Node> Parser::ParseIf(){
 	if(currTok.type == Token::Type::IF){
 		NextToken();
 
-		if(currTok.type != Token::Type::OPEN_PARENTH) return ret;
+		if(currTok.type != Token::Type::OPEN_PARENTH) {
+			Log::Error(*this, "Missing (");
+		}
 		NextToken();
 
 		auto cond = ParseExpr();
-		if(cond->type == NodeType::ERR) return ret;
+		if(cond->type == NodeType::ERR) {
+			Log::Error(*this, "Invalid expression");
+		}
 
 		NextToken();
 	
@@ -317,7 +360,7 @@ std::shared_ptr<Node> Parser::ParseIf(){
 		currScope = currScope->parent;
 		if(then->type == NodeType::ERR) {
 			currScope->scopes.pop_back();
-			return ret;
+			Log::Error(*this, "Invalid block");
 		}
 
 		std::shared_ptr<Node> elseBody = std::make_shared<Node>();
@@ -423,6 +466,7 @@ std::shared_ptr<Node> Parser::ParseVarDecl(){
 			return ParseFuncDecl(found, varName);
 		}
 	}
+
 	Log::Error(*this, "Type ", currTok.val, " not found");
 	return std::make_shared<Node>();
 }

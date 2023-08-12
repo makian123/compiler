@@ -17,6 +17,7 @@ static const std::unordered_map<std::string, Token::Type> keywords{
 	{ "struct", Token::Type::TYPE_STRUCT },
 	{ "if", Token::Type::IF },
 	{ "else", Token::Type::ELSE },
+	{ "while", Token::Type::WHILE },
 	{ "return", Token::Type::RETURN },
 };
 
@@ -71,7 +72,7 @@ Token Tokenizer::NextToken(){
 			val += lines[currLine][currChar++];
 		}
 
-		if(keywords.contains(val)) return Token(keywords.at(val), val, line);
+		if(keywords.contains(val)) return Token(keywords.at(val), "", line);
 
 		return Token(Token::Type::IDENT, val, line);
 	}

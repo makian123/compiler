@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include "codegen/codegen.hpp"
 #include "tokenizer/tokenizer.hpp"
 #include "parser/parser.hpp"
 
@@ -58,6 +59,7 @@ int main(int argc, char **argv){
 	
 	std::ofstream output(outFilePath);
 	output << parser.GenerateCode();
+	//GenerateCode(output, parser.GetRoot());
 	output.close();
 	
 	return 0;

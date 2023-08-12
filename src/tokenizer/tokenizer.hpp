@@ -55,6 +55,7 @@ struct Token{
 
 		IF,
 		ELSE,
+		WHILE,
 
 		RETURN,
 		
