@@ -92,6 +92,12 @@ static std::string GetCode(Node &node, int depth = 0){
 			else
 				ret += GetCode(*static_cast<VarDeclNode&>(node).initial.get(), depth + 2);
 			break;
+		case NodeType::VARASSIGN:
+			ret += Indent(depth) + "ASSIGN:\n";
+			ret += Indent(depth + 1) + static_cast<VarAssignNode&>(node).varName.val + "\n";
+			ret += Indent(depth + 1) + "VALUE:\n";
+			ret += GetCode(*static_cast<VarAssignNode&>(node).expression.get(), depth + 2) + "\n";
+			break;
 		case NodeType::FUNCDECL:
 			ret += Indent(depth) + "FUNC:\n";
 			ret += Indent(depth + 1) + "Name: " + static_cast<FuncDeclNode&>(node).ident.val + "\n";
@@ -99,7 +105,6 @@ static std::string GetCode(Node &node, int depth = 0){
 			for(auto &param:  static_cast<FuncDeclNode&>(node).params){
 				ret += GetCode(*param.get(), depth + 2) + "\n";
 			}
-			
 			ret += Indent(depth + 1) + "Body:\n";
 			ret += GetCode(*static_cast<FuncDeclNode&>(node).block.get(), depth + 2);
 			break;
@@ -236,23 +241,24 @@ void Parser::ParseStructdecl(){
 std::shared_ptr<Node> Parser::ParseStmt(){
 	std::shared_ptr<Node> ret = std::make_shared<Node>();
 
-	//Variable or function decl
 	if(FindType(currTok).type != VarType::Type::ERR){
 		ret = ParseVarDecl();
 		NextToken();
+		return ret;
 	}
 	else if(currTok.type == Token::Type::TYPE_STRUCT){
 		ParseStructdecl();
 		NextToken();	//Semicolon
 	}
-	//Variable stmt
 	else if(currTok.type == Token::Type::IF){
-		ret = ParseIf();
+		return ParseIf();
 	}
 	else if(currTok.type == Token::Type::RETURN){
 		NextToken();
 		ret = std::make_shared<ReturnNode>(ParseExpr());
 		NextToken();	//Semicolon
+
+		return ret;
 	}
 	else if(currTok.type == Token::Type::WHILE){
 		NextToken();
@@ -269,8 +275,6 @@ std::shared_ptr<Node> Parser::ParseStmt(){
 			then = ParseStmt();
 		}
 		else{
-			NextToken();
-			
 			currScope->scopes.push_back(std::make_shared<Scope>());
 			currScope->scopes.back()->parent = currScope;
 			currScope = currScope->scopes.back();
@@ -278,16 +282,23 @@ std::shared_ptr<Node> Parser::ParseStmt(){
 			then = ParseBlock();
 			
 			currScope = currScope->parent;
-
-			ret = std::make_shared<WhileNode>(cond, then);
-
-			NextToken();
 		}
+		
+		return std::make_shared<WhileNode>(cond, then);
 	}
 	else if(currTok.type == Token::Type::IDENT){
-		//TODO: make it work
+		auto varName = NextToken();
+		auto expr = std::make_shared<Node>();
+		if(currTok.type == Token::Type::ASSIGN){
+			NextToken();
+			expr = ParseExpr();
+		}
+		NextToken();
+
+		return std::make_shared<VarAssignNode>(varName, expr);
 	}
 	
+	NextToken();
 	return ret;
 }
 std::shared_ptr<Node> Parser::ParseFuncDecl(const VarType &funcType, const Token &name){
@@ -383,6 +394,32 @@ std::shared_ptr<Node> Parser::ParseIf(){
 
 	return ret;
 }
+std::shared_ptr<Node> Parser::ParseVarDecl(){
+	Token typeName = currTok;
+	auto &found = FindType(typeName);
+
+	if(found.type != VarType::Type::ERR){
+		NextToken();
+
+		Token varName = NextToken();
+		currScope->identifiers.emplace_back(varName, found);
+
+		if(currTok.type == Token::Type::SEMICOLON)
+			return std::make_shared<VarDeclNode>(&found, varName, std::make_shared<Node>());
+		
+		if(currTok.type == Token::Type::ASSIGN){
+			NextToken();
+			return std::make_shared<VarDeclNode>(&found, varName, ParseExpr());
+		}
+
+		if(currTok.type == Token::Type::OPEN_PARENTH){
+			return ParseFuncDecl(found, varName);
+		}
+	}
+
+	Log::Error(*this, "Type ", currTok.val, " not found");
+	return std::make_shared<Node>();
+}
 
 std::shared_ptr<Node> Parser::ParseExpr(int parentPrecedence){
 	auto left = ParsePrimary();
@@ -443,32 +480,6 @@ std::shared_ptr<Node> Parser::ParsePrimary(){
 		ret = ParseExpr();
 	}
 	return ret;
-}
-std::shared_ptr<Node> Parser::ParseVarDecl(){
-	Token typeName = currTok;
-	auto &found = FindType(typeName);
-
-	if(found.type != VarType::Type::ERR){
-		NextToken();
-
-		Token varName = NextToken();
-		currScope->identifiers.emplace_back(varName, found);
-
-		if(currTok.type == Token::Type::SEMICOLON)
-			return std::make_shared<VarDeclNode>(&found, varName, std::make_shared<Node>());
-		
-		if(currTok.type == Token::Type::ASSIGN){
-			NextToken();
-			return std::make_shared<VarDeclNode>(&found, varName, ParseExpr());
-		}
-
-		if(currTok.type == Token::Type::OPEN_PARENTH){
-			return ParseFuncDecl(found, varName);
-		}
-	}
-
-	Log::Error(*this, "Type ", currTok.val, " not found");
-	return std::make_shared<Node>();
 }
 
 Parser::Parser(Tokenizer &tok): tokenizer(tok) {
