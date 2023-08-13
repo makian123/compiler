@@ -1,10 +1,11 @@
 PROGRAMNAME := compiler.o
-BUILDDIR := ../build
+BUILDDIR := ../build/
+SOURCEDIR := ./
 
 SOURCES := $(shell find "./" -type f -name '*.cpp')
 HEADERS := $(shell find "./" -type f -name '*.(h|hpp)')
-OBJ = $(SOURCES:.cpp=.o)
-DEP = 
+OBJS := $(subst $(SOURCEDIR), $(BUILDDIR), $(SOURCES))
+OBJS := $(OBJS:.cpp=.o)
 
 CXX := g++
 CXXFLAGS := \
@@ -26,24 +27,18 @@ all:
 	@echo "[!] No release type set"
 
 debug: CXXFLAGS += -g -DDEBUG
-debug: BUILDDIR = ../build/debug
-debug: DEP = $(shell find $(BUILDDIR) -type f -name '*.d')
 
 release: CXXFLAGS += -Ofast
-release: BUILDDIR = ../build/release
-release: DEP = $(shell find $(BUILDDIR) -type f -name '*.d')
 
 debug: executable
 release: executable
 
-executable: $(OBJ) $(HEADERS)
+executable: $(OBJS)
 	@echo -n LINKING EVERYTHING...
-	@$(CXX) $(LDFLAGS) $(foreach obj, $(OBJ), $(BUILDDIR)/$(obj)) -o ../$(PROGRAMNAME)
+	@$(CXX) $(LDFLAGS) $(foreach obj, $(OBJS), $(BUILDDIR)/$(obj)) -o ../$(PROGRAMNAME)
 	@echo done
 
-
-
-%.o: %.cpp
+$(BUILDDIR)%.o: $(SOURCEDIR)%.cpp
 	@echo [C++] COMPILING $<
 	@mkdir -p $(BUILDDIR)/$(@D)
 	@$(CXX) $(CXXFLAGS) -o $(BUILDDIR)/$(@D)/$(notdir $@) $<
