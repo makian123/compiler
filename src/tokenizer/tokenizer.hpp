@@ -41,12 +41,14 @@ struct Token{
 
 		NOT,
 
-		EQ,
+		COMP_BEGIN,
+		EQ = COMP_BEGIN,
 		NEQ,
 		GREATER,
 		GEQ,
 		LESS,
 		LEQ,
+		COMP_END = LEQ,
 
 		SEMICOLON,
 		COMMA,
@@ -72,7 +74,7 @@ struct Token{
 	explicit Token(): type(Type::ERR), val(""), line(0) {}
 	Token(Type type_, const std::string &val_ = "", size_t line_ = 0): type(type_), val(val_), line(line_) {}
 	Token(const Token &tok):type(tok.type), val(tok.val), line(tok.line) {}
-	Token(const Token &&tok):type(tok.type), val(tok.val), line(tok.line) {}
+	Token(const Token &&tok):type(tok.type), val(std::move(tok.val)), line(tok.line) {}
 
 	Token &operator=(const Token &other){
 		type = other.type;

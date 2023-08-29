@@ -3,7 +3,6 @@
 #include <vector>
 #include <string>
 #include <cstring>
-#include "codegen/codegen.hpp"
 #include "tokenizer/tokenizer.hpp"
 #include "parser/parser.hpp"
 
@@ -42,7 +41,7 @@ int main(int argc, char **argv){
 		return 1;
 	}
 	if(!outFilePath.length()){
-		outFilePath = "a.out";
+		outFilePath = "a.asm";
 	}
 
 	std::ifstream inFile(inFilePaths[0]);
@@ -54,13 +53,12 @@ int main(int argc, char **argv){
 	}
 	inFile.close();
 
-	Parser parser(tokenizer);
+	Parser parser(tokenizer, inFilePaths[0]);
 	parser.Parse();
 	
-	std::ofstream output(outFilePath);
-	output << parser.GenerateCode();
-	//GenerateCode(output, parser.GetRoot());
-	output.close();
+	//std::ofstream output(outFilePath);
+	parser.GenerateCode();
+	//output.close();
 	
 	return 0;
 }

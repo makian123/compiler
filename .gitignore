@@ -1,7 +1,10 @@
 build/*
-.vscode/
+.vscode/*
+intellisense/*
 
 *.o
 *.out
 *.d
 *.txt
+*.sh
+*.mlang

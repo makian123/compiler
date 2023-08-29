@@ -7,19 +7,22 @@ HEADERS := $(shell find "./" -type f -name '*.(h|hpp)')
 OBJS := $(subst $(SOURCEDIR), $(BUILDDIR), $(SOURCES))
 OBJS := $(OBJS:.cpp=.o)
 
-CXX := g++
+CXX := clang++
 CXXFLAGS := \
 	-I./ \
 	-c \
 	-std=c++20 \
-	-MMD
+	-MMD \
+	-Wno-switch \
+	`$(llvm-config --cxxflags)`
 
-ifeq ($(TARGET), x86)
-CXXFLAGS += -DCURR_ABI=3
-else
-CXXFLAGS += -DCURR_ABI=62
-endif
-LDFLAGS := 
+#ifeq ($(TARGET), x86)
+#CXXFLAGS += -DCURR_ABI=3
+#else
+#CXXFLAGS += -DCURR_ABI=62
+#endif
+LDFLAGS := `llvm-config --ldflags` -v -rdynamic
+LIBS := `llvm-config --libs --system-libs`
 
 .PHONY: all debug release clean
 
@@ -28,14 +31,14 @@ all:
 
 debug: CXXFLAGS += -g -DDEBUG
 
-release: CXXFLAGS += -Ofast
+release: CXXFLAGS += -O3
 
 debug: executable
 release: executable
 
 executable: $(OBJS)
 	@echo -n LINKING EVERYTHING...
-	@$(CXX) $(LDFLAGS) $(foreach obj, $(OBJS), $(BUILDDIR)/$(obj)) -o ../$(PROGRAMNAME)
+	@$(CXX) $(LDFLAGS) $(LIBS) $(foreach obj, $(OBJS), $(BUILDDIR)/$(obj)) -o ../$(PROGRAMNAME)
 	@echo done
 
 $(BUILDDIR)%.o: $(SOURCEDIR)%.cpp

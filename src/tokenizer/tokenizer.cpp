@@ -5,21 +5,21 @@
 
 const Token Token::ERROR = Token();
 
-static const std::unordered_map<std::string, Token::Type> keywords{
-	{ "void", Token::Type::TYPE_VOID },
-	{ "char", Token::Type::TYPE_CHAR },
-	{ "short", Token::Type::TYPE_SHORT },
-	{ "int", Token::Type::TYPE_INT },
-	{ "long", Token::Type::TYPE_LONG },
-	{ "float", Token::Type::TYPE_FLOAT },
-	{ "double", Token::Type::TYPE_DOUBLE },
-	{ "enum", Token::Type::TYPE_ENUM },
-	{ "struct", Token::Type::TYPE_STRUCT },
-	{ "if", Token::Type::IF },
-	{ "else", Token::Type::ELSE },
-	{ "while", Token::Type::WHILE },
-	{ "return", Token::Type::RETURN },
-};
+	static const std::unordered_map<std::string, Token::Type> keywords{
+		{ "void", Token::Type::TYPE_VOID },
+		{ "char", Token::Type::TYPE_CHAR },
+		{ "short", Token::Type::TYPE_SHORT },
+		{ "int", Token::Type::TYPE_INT },
+		{ "long", Token::Type::TYPE_LONG },
+		{ "float", Token::Type::TYPE_FLOAT },
+		{ "double", Token::Type::TYPE_DOUBLE },
+		{ "enum", Token::Type::TYPE_ENUM },
+		{ "struct", Token::Type::TYPE_STRUCT },
+		{ "if", Token::Type::IF },
+		{ "else", Token::Type::ELSE },
+		{ "while", Token::Type::WHILE },
+		{ "return", Token::Type::RETURN },
+	};
 
 void Tokenizer::AddLine(std::string line){
 	while (line.find("\r\n") != std::string::npos){

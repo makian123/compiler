@@ -1,14 +1,30 @@
 #include "parser.hpp"
-#include <algorithm>
-#include <unordered_map>
-#include <stdexcept>
-#include <iostream>
 #include <sstream>
+#include <iostream>
+#include <algorithm>
+#include <stdexcept>
+#include <unordered_map>
+
+#include <llvm/IR/Type.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/IR/Constant.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LLVMContext.h>
+
 #include "util/logger.hpp"
 
+static std::unique_ptr<llvm::LLVMContext> context;
+static std::unique_ptr<llvm::IRBuilder<>> builder;
+static std::unique_ptr<llvm::Module> module;
+static llvm::BasicBlock *currentScope = nullptr;
+static llvm::Function *currFunc = nullptr;
+static Parser *currParser = nullptr;
+
 const VarType VarType::ERROR = VarType();
-static std::pair<Token, VarType> EmptyName;
+static Scope::Variable EmptyName;
 static bool parsingParams = false;
+static bool parsingCond = false;
 
 static int Precedence(const Token &tok){
 	switch(tok.type){
@@ -135,14 +151,14 @@ std::string Parser::GenerateCode() const{
 	return GetCode(*rootNode.get());
 }
 
-std::pair<Token, VarType> &Parser::FindIdent(const Token &name) const{
+Scope::Variable &Parser::FindIdent(const Token &name) const{
 	std::shared_ptr<Scope> currentScope = currScope;
 	while(currentScope){
 		auto foundPos = std::find_if(
 			currentScope->identifiers.begin(), 
 			currentScope->identifiers.end(), 
-			[name](const auto &pair) {
-				return pair.first.val == name.val;
+			[name](const Scope::Variable &var) {
+				return var.ident.val == name.val;
 			}
 		);
 		if(foundPos != currentScope->identifiers.end())
@@ -176,7 +192,19 @@ const VarType &Parser::FindType(const Token &toFind) const{
 	return VarType::ERROR;
 }
 
+static std::string GetIR() {
+	std::string module_str;
+	llvm::raw_string_ostream ostream{module_str};
+	module->print(ostream, nullptr, false);
+	return module_str;
+}
 void Parser::Parse(){
+	context = std::make_unique<llvm::LLVMContext>();
+	module = std::make_unique<llvm::Module>(fileName, *context);
+	builder = std::make_unique<llvm::IRBuilder<>>(*context);
+
+	currParser = this;
+
 	while(true){
 		if(currTok.type == Token::Type::TEOF || currTok.type == Token::Type::ERR) break;
 		
@@ -184,6 +212,11 @@ void Parser::Parse(){
 		if(node->type != NodeType::ERR)
 			rootNode->AddStmt(node);
 	}
+
+	auto tmp = rootNode->Codegen();
+
+	module->print(llvm::errs(), nullptr);
+	currParser = nullptr;
 }
 
 std::shared_ptr<Node> Parser::ParseBlock(){
@@ -192,7 +225,7 @@ std::shared_ptr<Node> Parser::ParseBlock(){
 		return stmt;
 	}
 	
-	std::shared_ptr<BlockNode> ret = std::make_shared<BlockNode>();
+	auto ret = std::make_shared<BlockNode>(std::vector<std::shared_ptr<Node>>(), currScope);
 	NextToken();
 
 	while(true){
@@ -334,7 +367,7 @@ std::shared_ptr<Node> Parser::ParseParam(){
 	if(found.type != VarType::Type::ERR){
 		NextToken();
 		Token varName = NextToken();
-		currScope->identifiers.emplace_back(varName, found);
+		currScope->identifiers.emplace_back(varName, found, nullptr);
 
 		if(currTok.type == Token::Type::COMMA || currTok.type == Token::Type::CLOSED_PARENTH)
 			return std::make_shared<VarDeclNode>(&found, varName, std::make_shared<Node>());
@@ -402,7 +435,7 @@ std::shared_ptr<Node> Parser::ParseVarDecl(){
 		NextToken();
 
 		Token varName = NextToken();
-		currScope->identifiers.emplace_back(varName, found);
+		currScope->identifiers.emplace_back(varName, found, nullptr);
 
 		if(currTok.type == Token::Type::SEMICOLON)
 			return std::make_shared<VarDeclNode>(&found, varName, std::make_shared<Node>());
@@ -443,7 +476,7 @@ std::shared_ptr<Node> Parser::ParsePrimary(){
 	}
 	else if(currTok.type == Token::Type::IDENT){
 		auto tmpName = NextToken();
-		auto type = FindIdent(tmpName).second;
+		auto type = FindIdent(tmpName).type;
 		if(type.type == VarType::Type::ERR){
 			Log::Error(*this, "Variable '", tmpName.val, "' not found\n");
 		}
@@ -482,7 +515,7 @@ std::shared_ptr<Node> Parser::ParsePrimary(){
 	return ret;
 }
 
-Parser::Parser(Tokenizer &tok): tokenizer(tok) {
+Parser::Parser(Tokenizer &tok, const std::string &fileName_): tokenizer(tok), fileName(fileName_) {
 	primitives[Token::Type::TYPE_VOID] = VarType(VarType::Type::VOID, std::string(), 0, nullptr, std::vector<Member>(), false, false, 0);
 	primitives[Token::Type::TYPE_CHAR] = VarType(VarType::Type::CHAR, std::string(), 1, nullptr, std::vector<Member>(), false, false, 0);
 	primitives[Token::Type::TYPE_SHORT] = VarType(VarType::Type::SHORT, std::string(), 2, nullptr, std::vector<Member>(), false, false, 0);
@@ -492,6 +525,244 @@ Parser::Parser(Tokenizer &tok): tokenizer(tok) {
 	primitives[Token::Type::TYPE_DOUBLE] = VarType(VarType::Type::DOUBLE, std::string(), 8, nullptr, std::vector<Member>(), false, false, 0);
 
 	currTok = tokenizer.NextToken();
-	rootNode = std::make_shared<BlockNode>(std::vector<std::shared_ptr<Node>>());
 	currScope = std::make_shared<Scope>();
+	rootNode = std::make_shared<BlockNode>(std::vector<std::shared_ptr<Node>>(), currScope);
+}
+
+VarType::VarType(
+	Type type_, 
+	std::string name_, 
+	size_t typeSz_, 
+	VarType *baseType_, 
+	const std::vector<Member> &members_, 
+	bool isUnsigned_,
+	bool isArray_, 
+	size_t arrSize_)
+	:type(type_), name(name_), typeSz(typeSz_),
+	baseType(baseType_), members(members_), isUnsigned(isUnsigned_), 
+	isArray(isArray_), arrSize(arrSize_){}
+VarType::VarType(const VarType &other)
+		:type(other.type), name(other.name), typeSz(other.typeSz), 
+		baseType(other.baseType), members(other.members), isUnsigned(other.isUnsigned), 
+		isArray(other.isArray), arrSize(other.arrSize){}
+
+llvm::Type *VarType::Codegen() const {
+	if(type == Type::PTR){
+		switch(type){
+			case Type::VOID:
+				return llvm::Type::getInt64Ty(*context);
+			case Type::CHAR:
+				return llvm::Type::getInt8PtrTy(*context);
+			case Type::SHORT:
+				return llvm::Type::getInt16PtrTy(*context);
+			case Type::INT:
+				return llvm::Type::getInt32PtrTy(*context);
+			case Type::LONG:
+				return llvm::Type::getInt64PtrTy(*context);
+			case Type::FLOAT:
+				return llvm::Type::getFloatPtrTy(*context);
+			case Type::DOUBLE:
+				return llvm::Type::getDoublePtrTy(*context);
+		}
+	}
+	else {
+		switch(type){
+			case Type::VOID:
+				return llvm::Type::getVoidTy(*context);
+			case Type::CHAR:
+				return llvm::Type::getInt8Ty(*context);
+			case Type::SHORT:
+				return llvm::Type::getInt16Ty(*context);
+			case Type::INT:
+				return llvm::Type::getInt32Ty(*context);
+			case Type::LONG:
+				return llvm::Type::getInt64Ty(*context);
+			case Type::FLOAT:
+				return llvm::Type::getFloatTy(*context);
+			case Type::DOUBLE:
+				return llvm::Type::getDoubleTy(*context);
+		}
+	}
+
+	std::cerr << "Type not found\n";
+	return nullptr;
+}
+llvm::Value *ValNode::Codegen() {
+	if((int)val.type >= (int)Token::Type::VALUES_BEGIN && (int)val.type <= (int)Token::Type::VALUES_END){
+		switch(val.type){
+			case Token::Type::INTEGER_NUMBER:
+				return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), val.val, 10);
+			case Token::Type::FLOATING_NUMBER:
+				return llvm::ConstantFP::get(*context, llvm::APFloat(std::stod(val.val)));
+			default:
+				return nullptr;
+		}
+	}
+
+	auto ident = currParser->FindIdent(val);
+	if(ident.type.type == VarType::Type::ERR) 
+		std::cerr << "Invalid variable referenced\n";
+	return ident.val;
+}
+llvm::Value *BinaryNode::Codegen() {
+	auto l = lhs->Codegen();
+	auto r = rhs->Codegen();
+
+	if(!l || !r) return nullptr;
+
+	switch(operand.type){
+		case Token::Type::PLUS:
+			return builder->CreateFAdd(l, r, "addtmp");
+		case Token::Type::MINUS:
+			return builder->CreateFSub(l, r, "subtemp");
+		case Token::Type::STAR:
+			return builder->CreateFMul(l, r, "multemp");
+		case Token::Type::SLASH:
+			return builder->CreateFDiv(l, r, "divtemp");
+		case Token::Type::GREATER:
+		case Token::Type::GEQ:
+		case Token::Type::LESS:
+		case Token::Type::LEQ:
+			return builder->CreateUIToFP(l, llvm::Type::getDoubleTy(*context), "booltmp");
+		default:
+			std::cerr << "Invalid operantor\n";
+			return nullptr;
+	}
+}
+llvm::Value *VarDeclNode::Codegen() {
+	auto &ident = currParser->FindIdent(this->ident);
+	llvm::Value *toRet = nullptr;
+	if(varType->isArray){
+		toRet = builder->CreateAlloca(
+			varType->Codegen(),
+			0, 
+			llvm::ConstantInt::get(*context, llvm::APInt(64, varType->arrSize, false)),
+			this->ident.val
+		);
+
+		if(initial){ builder->CreateStore(toRet, initial->Codegen(), false); }
+		ident.val = toRet;
+
+		return toRet;
+	}
+
+	toRet = builder->CreateAlloca(varType->Codegen(), 0, nullptr, this->ident.val);
+	
+	if(initial->type != NodeType::ERR){ builder->CreateStore(toRet, initial->Codegen(), false); }
+	ident.val = toRet;
+
+	return toRet;
+}
+llvm::Value *BlockNode::Codegen() {
+	auto parentScope = currParser->GetScope();
+	currParser->SetScope(myScope);
+
+	for(auto &node: stmts){
+		llvm::Value *ret = node->Codegen();
+		if(false){
+			std::cerr << "Node: ";
+			ret->print(llvm::errs());
+			std::cerr << "\n";
+		}
+
+		std::string error_str;
+  		llvm::raw_string_ostream ostream{error_str};
+		if(llvm::verifyModule(*module, &ostream)){
+			std::cout << "Error in IR: " << GetIR() << "\nERROR: " << error_str << "\n\n";
+		}
+	}
+
+	currParser->SetScope(parentScope);
+
+	return nullptr;
+}
+llvm::Value *MemberNode::Codegen() {
+	return nullptr;
+}
+llvm::Value *FuncDeclNode::Codegen() {
+	auto func = llvm::Function::Create(
+		llvm::FunctionType::get(funcType->Codegen(), false), 
+		llvm::Function::ExternalLinkage, 
+		ident.val, 
+		*module
+	);
+
+	auto body = llvm::BasicBlock::Create(*context, "entry", func);
+	builder->SetInsertPoint(body);
+	auto lastScope = currentScope;
+
+	currentScope = body;
+	currFunc = func;
+	if(block){
+		block->Codegen();
+	}
+	currFunc = nullptr;
+	currentScope = lastScope;
+
+	//llvm::verifyFunction(*func);
+
+	return func;
+}
+llvm::Value *VarAssignNode::Codegen() {
+	const auto &varFind = currParser->FindIdent(varName);
+	if(varFind.type.type != VarType::Type::ERR){
+		return builder->CreateStore(varFind.val, expression->Codegen(), false);
+	}
+
+	std::cerr << "Invalid type of variable " << varFind.ident.val << "\n";
+	return nullptr;
+}
+llvm::Value *WhileNode::Codegen() {
+	return nullptr;
+}
+llvm::Value *IfNode::Codegen() {
+	auto condVal = cond->Codegen();
+	condVal = builder->CreateFCmpONE(condVal, llvm::ConstantFP::get(*context, llvm::APFloat(0.0f)), "ifcond");
+	auto func = builder->GetInsertBlock()->getParent();
+
+	auto thenBB = llvm::BasicBlock::Create(*context, "then", func);
+	auto elseBB = llvm::BasicBlock::Create(*context, "else");
+	auto mergeBB = llvm::BasicBlock::Create(*context, "ifcond");
+
+	builder->CreateCondBr(condVal, thenBB, elseBB);
+
+	builder->SetInsertPoint(thenBB);
+	auto thenVal = then->Codegen();
+	if(!thenVal) return nullptr;
+
+	builder->CreateBr(mergeBB);
+
+	thenBB = builder->GetInsertBlock();
+
+	llvm::Value *elseVal = nullptr;
+
+	func->getBasicBlockList().push_back(elseBB);
+	builder->SetInsertPoint(elseBB);
+
+	if(elseBody){
+		elseVal = elseBody->Codegen();
+
+		if(!elseVal) return nullptr;
+	}
+	builder->CreateBr(mergeBB);
+
+	elseBB = builder->GetInsertBlock();
+
+	func->getBasicBlockList().push_back(mergeBB);
+	builder->SetInsertPoint(mergeBB);
+	auto pn = builder->CreatePHI(llvm::Type::getDoubleTy(*context), (bool)then + (bool)elseBody, "iftmp");
+
+	pn->addIncoming(thenVal, thenBB);
+	if(elseBody){
+		pn->addIncoming(elseVal, elseBB);
+	}
+
+	return pn;
+}
+llvm::Value *ReturnNode::Codegen() {
+	llvm::Value *ret = nullptr;
+	if(expr->type == NodeType::ERR){ ret = builder->CreateRetVoid(); }
+	else { ret = builder->CreateRet(expr->Codegen()); }
+
+	return ret;
 }
